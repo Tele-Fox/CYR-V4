@@ -13,6 +13,6 @@ adv() {
  echo "Use:"
  echo "$0 r"
  #This is a helper for create anti spam bot.
- #created by: @janlou and powered by: @AdvanTm
+ #created by: @ILoveItaly and powered by: #FoxTeam
  #warning: CopyRight all right reserved, we can block you channel or bot.
 fi
