@@ -14,7 +14,7 @@ if matches[1] == 'delwelcome' and is_owner(msg) then
         return 'Group welcome Deleted!'
 end
 if not is_owner(msg) then 
-    return 'For Owners Only!'
+    return 'For Leaders Only!'
 end
 --------------------Loading Group Rules
 local rules = data[tostring(msg.to.id)]['rules']
@@ -29,7 +29,7 @@ data[tostring(msg.to.id)]['group_welcome'] = matches[3]..'\n\nGroup Rules :\n'..
         return 'Group welcome Set To :\n'..matches[3]
 end
 if not is_owner(msg) then 
-    return 'For Owners Only!'
+    return 'For Leaders Only!'
 end
 
 if matches[1] == 'setwelcome' and is_owner(msg) then
@@ -40,7 +40,7 @@ data[tostring(msg.to.id)]['group_welcome'] = matches[2]
         return 'Group welcome Seted To : \n'..matches[2]
 end
 if not is_owner(msg) then 
-    return 'For Owners Only!'
+    return 'For Leaders Only!'
 end
 
 if matches[1] == 'chat_add_user' or 'chat_add_user_link' then --For Normal Group
