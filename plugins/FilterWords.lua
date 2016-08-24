@@ -1,11 +1,3 @@
---[[
-
-#
-#     @GPMOD
-#   @Dragon_Born
-#      
-
-]]
 local function filter(msg, name)
     local hash = 'chat:'..msg.to.id..':filter'
     redis:hset(hash, name, 'newword')
