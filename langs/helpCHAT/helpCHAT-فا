@@ -1,1 +1,665 @@
-#InCreating by #EhsanFox 
+do
+
+local function callback(extra, success, result)
+	vardump(success)
+end
+local function is_spromoted(chat_id, user_id)
+  local hash =  'sprom:'..chat_id..':'..user_id
+  local spromoted = redis:get(hash)
+  return spromoted or false
+end
+
+local function spromote(receiver, user_id, username)
+  local chat_id = string.gsub(receiver, '.+#id', '')
+  local data = load_data(_config.moderation.data)
+  if not data[tostring(chat_id)] then
+    return send_large_msg(receiver, 'گروه اضافه نشده است')
+  end
+  if data[tostring(chat_id)]['moderators'][tostring(user_id)] then
+    if is_spromoted(chat_id, user_id) then
+      return send_large_msg(receiver, 'هم اکنون مدیر گروه می باشد')
+    end
+    local hash =  'sprom:'..chat_id..':'..user_id
+  redis:set(hash, true)
+  send_large_msg(receiver, 'فرد '..username..' ['..user_id..'] به مدیر ارتقا پیدا کرد')
+  return
+  else
+    data[tostring(chat_id)]['moderators'][tostring(user_id)] = string.gsub(username, '@', '')
+    save_data(_config.moderation.data, data)
+    local hash =  'sprom:'..chat_id..':'..user_id
+    redis:set(hash, true)
+    send_large_msg(receiver, 'فرد '..username..' ['..user_id..'] به مدیر ارتقا پیدا کرد')
+    return
+  end
+end
+
+local function sdemote(receiver, user_id, username)
+  local chat_id = string.gsub(receiver, '.+#id', '')
+  if not is_spromoted(chat_id, user_id) then
+    return send_large_msg(receiver, 'مدیر گروه نیست')
+  end
+  local data = load_data(_config.moderation.data)
+  data[chat_id]['moderators'][tostring(user_id)] = nil
+  save_data(_config.moderation.data, data)
+  local hash =  'sprom:'..chat_id..':'..user_id
+  redis:del(hash)
+  send_large_msg(receiver, 'فرد '..username..' ['..user_id..'] از مدیریت خارج شد!')
+end
+
+local function check_member(cb_extra, success, result)
+   local receiver = cb_extra.receiver
+   local data = cb_extra.data
+   local msg = cb_extra.msg
+   for k,v in pairs(result.members) do
+      local user_id = v.id
+      if user_id ~= our_id then
+          local username = v.username
+          data[tostring(msg.to.id)] = {
+            moderators ={},
+            settings = {
+              set_name = string.gsub(msg.to.print_name, '_', ' '),
+              lock_name = 'no',
+              lock_photo = 'no',
+              lock_member = 'no',
+              lock_bot = 'yes',
+              lock_link = 'no',
+              lock_inviteme = 'no',
+              lock_sticker = 'no',
+              lock_image = 'no',
+              --lock_video = 'no',
+              --lock_audio = 'no',
+              lock_file = 'no',
+              lock_talk = 'no'
+            },
+            group_type = msg.to.type,
+            blocked_words = {},
+          }
+          save_data(_config.moderation.data, data)
+				  local hash =  'sprom:'..msg.to.id..':'..user_id
+	        redis:set(hash, true)
+          return send_large_msg(receiver, 'شما مدیر گروه شدید')
+      end
+    end
+end
+
+local function modadd(msg)
+  if not is_admin(msg) then
+    return
+  end
+  local data = load_data(_config.moderation.data)
+  if data[tostring(msg.to.id)] then
+    return 'گروه از قبل به لیست گروه های ربات اضافه شده بود'
+  end
+  data[tostring(msg.to.id)] = {
+    moderators ={},
+    settings = {
+      set_name = string.gsub(msg.to.print_name, '_', ' '),
+      lock_name = 'no',
+      lock_photo = 'no',
+      lock_member = 'no',
+      lock_bot = 'yes',
+      lock_link = 'no',
+      lock_inviteme = 'no',
+      lock_sticker = 'no',
+      lock_image = 'no',
+      --lock_video = 'no',
+      --lock_audio  = 'no',
+      lock_file = 'no',
+      lock_talk = 'no',
+    },
+    group_type = msg.to.type,
+    blocked_words = {},
+  }
+  save_data(_config.moderation.data, data)
+  return 'گروه اضافه شد'
+end
+
+local function modrem(msg)
+  if not is_admin(msg) then
+    return "شما ادمین ربات نیستید"
+  end
+  local data = load_data(_config.moderation.data)
+  local receiver = get_receiver(msg)
+  if not data[tostring(msg.to.id)] then
+    return 'گروه به لیست گروه های ربات اضافه نشده است.'
+  end
+
+  data[tostring(msg.to.id)] = nil
+  save_data(_config.moderation.data, data)
+
+  return 'گروه خارج شد از لیست گروه های ربات'
+end
+
+local function promote(receiver, username, user_id)
+  local data = load_data(_config.moderation.data)
+  local group = string.gsub(receiver, '.+#id', '')
+  if not data[group] then
+    return send_large_msg(receiver, 'گروه اضافه نشده است')
+  end
+  if data[group]['moderators'][tostring(user_id)] then
+    return send_large_msg(receiver, username..' هم اکنون در لیست مدیر ها قرار دارد')
+    end
+    data[group]['moderators'][tostring(user_id)] = string.gsub(username, '@', '')
+    save_data(_config.moderation.data, data)
+    return send_large_msg(receiver, username..' به لیست مدیر ها اضافه شد')
+end
+
+local function demote(receiver, username, user_id)
+  local data = load_data(_config.moderation.data)
+  local group = string.gsub(receiver, '.+#id', '')
+  if not data[group] then
+    return send_large_msg(receiver, 'گروه به لیست گروه های ربات اضافه نشده است')
+  end
+  if not data[group]['moderators'][tostring(user_id)] then
+    return send_large_msg(receiver, string.gsub(username, '@', '')..' مدیر گروه نیست')
+  end
+  data[group]['moderators'][tostring(user_id)] = nil
+  save_data(_config.moderation.data, data)
+  return send_large_msg(receiver, username..' has been demoted.')
+end
+
+local function upmanager(receiver, username, user_id)
+  channel_set_admin(receiver, 'user#id'..user_id, callback, false)
+  return send_large_msg(receiver, 'انجام شد!')
+end
+
+local function inmanager(receiver, username, user_id)
+  channel_set_unadmin(receiver, 'user#id'..user_id, callback, false)
+  return send_large_msg(receiver, 'انجام شد!')
+end
+
+local function admin_promote(receiver, username, user_id)  
+  local data = load_data(_config.moderation.data)
+  if not data['admins'] then
+    data['admins'] = {}
+    save_data(_config.moderation.data, data)
+  end
+
+  if data['admins'][tostring(user_id)] then
+    return send_large_msg(receiver, username..' هم اکنون ادمین است')
+  end
+  
+  data['admins'][tostring(user_id)] = string.gsub(username, '@', '')
+  save_data(_config.moderation.data, data)
+  return send_large_msg(receiver, username..' به مدیریت ارتقا پیدا کرد')
+end
+
+local function admin_demote(receiver, username, user_id)
+    local data = load_data(_config.moderation.data)
+  if not data['admins'] then
+    data['admins'] = {}
+    save_data(_config.moderation.data, data)
+  end
+
+  if not data['admins'][tostring(user_id)] then
+    return send_large_msg(receiver, username..' مدیر نیست')
+  end
+
+  data['admins'][tostring(user_id)] = nil
+  save_data(_config.moderation.data, data)
+
+  return send_large_msg(receiver, 'ادمین '..username..' از مقام خود خارج شد')
+end
+
+local function username_id(cb_extra, success, result)
+   local get_cmd = cb_extra.get_cmd
+   local receiver = cb_extra.receiver
+   local member = cb_extra.member
+   local text = 'فردی با یوزر نیم  @'..member..' در ابر گروه شما وجود ندارد'
+   for k,v in pairs(result.members) do
+      vusername = v.username
+      if vusername == member then
+        username = member
+        user_id = v.peer_id
+        if get_cmd == 'promote' then
+            return promote(receiver, username, user_id)
+        elseif get_cmd == 'demote' then
+          if is_spromoted(string.gsub(receiver,'.+#id', ''), user_id) then
+            return send_large_msg(receiver, 'شما قدرت برداشتن مدیر اصلی از مدیریت را نداری')
+          end
+          return demote(receiver, username, user_id)
+        elseif get_cmd == 'adminprom' then
+          if user_id == our_id then
+            return
+          end
+          return admin_promote(receiver, username, user_id)
+        elseif get_cmd == 'admindem' then
+          if user_id == our_id then
+            return
+          end
+          return admin_demote(receiver, username, user_id)
+        elseif get_cmd == 'spromote' then
+          return spromote(receiver, user_id, username)
+        elseif get_cmd == 'sdemote' then
+          return sdemote(receiver, user_id, username)
+        end
+      end
+   end
+   send_large_msg(receiver, text)
+end
+
+local function channel_username_id(cb_extra, success, result)
+   local get_cmd = cb_extra.get_cmd
+   local receiver = cb_extra.receiver
+   local member = cb_extra.member
+   local text = 'فردی با یوزر نیم @'..member..' در ابرگروه شما نیست'
+   for k,v in pairs(result) do
+      vusername = v.username
+      if vusername == member then
+        username = member
+        user_id = v.peer_id
+        if get_cmd == 'promote' then
+          return promote(receiver, username, user_id)
+        elseif get_cmd == 'demote' then
+          if is_spromoted(string.gsub(receiver,'.+#id', ''), user_id) then
+            return send_large_msg(receiver, 'شما نمی توانید مدیر اصلی را از مقام خود خارج کنید')
+          end
+          return demote(receiver, username, user_id)
+        elseif get_cmd == 'adminprom' then
+          if user_id == our_id then
+            return
+          end
+          return admin_promote(receiver, username, user_id)
+        elseif get_cmd == 'admindem' then
+          if user_id == our_id then
+            return
+          end
+          return admin_demote(receiver, username, user_id)
+        elseif get_cmd == 'spromote' then
+          return spromote(receiver, user_id, username)
+        elseif get_cmd == 'sdemote' then
+          return sdemote(receiver, user_id, username)
+        elseif get_cmd == 'upmanager' then
+          return upmanager(receiver, username, user_id)
+        elseif get_cmd == 'inmanager' then
+          return inmanager(receiver, username, user_id)
+        end
+      end
+   end
+   send_large_msg(receiver, text)
+end
+
+local function get_msg_callback(extra, success, result)
+  if success ~= 1 then return end
+  local get_cmd = extra.get_cmd
+  local receiver = extra.receiver
+  local user_id = result.from.peer_id
+  local chat_id = result.to.id
+  if result.from.username then
+    username = '@'..result.from.username
+  else
+    username = string.gsub(result.from.print_name, '_', ' ')
+  end
+  if get_cmd == 'spromote' then
+    if user_id == our_id then
+      return nil
+    end
+    return spromote(receiver, user_id, username)
+  end
+  if get_cmd == 'sdemote' then
+    if user_id == our_id then
+      return nil
+    end
+    return sdemote(receiver, user_id, username)
+  end
+  if get_cmd == 'promote' then
+    if user_id == our_id then
+      return nil
+    end
+    return promote(receiver, username, user_id)
+  end
+  if get_cmd == 'demote' then
+    if user_id == our_id then
+      return nil
+    end
+    if is_spromoted(chat_id, user_id) then
+      return send_large_msg(receiver, 'شما قدرت خارج کردن مدیر اصلی را از مقامش ندارید')
+    end
+    return demote(receiver, username, user_id)
+  end
+  if get_cmd == 'upmanager' then
+    return upmanager(receiver, username, user_id)
+  end
+  if get_cmd == 'inmanager' then
+    return inmanager(receiver, username, user_id)
+  end
+end
+
+local function modlist(msg)
+  local data = load_data(_config.moderation.data)
+  if not data[tostring(msg.to.id)] then
+    return 'گروه به لیست گروه های ربات اضافه نشده است'
+  end
+  -- determine if table is empty
+  if next(data[tostring(msg.to.id)]['moderators']) == nil then --fix way
+    return 'هیچ مدیری در این گروه ثبت نشده است'
+  end
+  local message = 'لیست کامل مدیران گروه  ' .. string.gsub(msg.to.print_name, '_', ' ') .. ':\n'
+  for k,v in pairs(data[tostring(msg.to.id)]['moderators']) do
+    if is_spromoted(msg.to.id, k) then
+      message = message .. '- '..v..' [' ..k.. '] * \n'
+    else
+      message = message .. '- '..v..' [' ..k.. '] \n'
+    end
+  end
+
+  return message
+end
+
+local function admin_list(msg)
+    local data = load_data(_config.moderation.data)
+  if not data['admins'] then
+    data['admins'] = {}
+    save_data(_config.moderation.data, data)
+  end
+  if next(data['admins']) == nil then --fix way
+    return 'ربات ادمینی ندارد'
+  end
+  local message = 'لیست ادمین های ربات:\n'
+  for k,v in pairs(data['admins']) do
+    message = message .. '- ' .. v ..' ['..k..'] \n'
+  end
+  return message
+end
+
+function run(msg, matches)
+  if is_chat_msg(msg) then
+    local get_cmd = matches[1]
+    local receiver = get_receiver(msg)
+    if matches[1] == 'فعال' then
+      return modadd(msg)
+    end
+    
+    if matches[1] == 'غیر فعال' then
+      return modrem(msg)
+    end
+    
+    if matches[1] == 'اضافه مدیر' then
+      if not is_momod(msg) then
+        return
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      local member = string.gsub(matches[2], "@", "")
+      chat_info(receiver, username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اخراج مدیر' then
+      if not is_momod(msg) then
+        return "فقط مدیر اصلی گروه می تواند یک مدیر دیگر را از مقامش خارج کند"
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      if string.gsub(matches[2], "@", "") == msg.from.username then
+        return "شما نمی توانید خود را از مدیریت خارج ککنید"
+      end
+      local member = string.gsub(matches[2], "@", "")
+      chat_info(receiver, username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اضافه ادمین' then
+      if not is_admin(msg) then
+        return "فقط ادمین ها می توانند یک ادمین جدید اضافه کنند"
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      local member = string.gsub(matches[2], "@", "")
+      chat_info(receiver, username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اخراج ادمین' then
+      if not is_admin(msg) then
+        return "فقط ادمین ها می توانند یک فرد را از ادمینی اخراج ککند"
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      if string.match(matches[2], '^%d+$') then
+        return sdemote(receiver, matches[2], matches[2])
+      end
+      local member = string.gsub(matches[2], "@", "")
+      chat_info(receiver, username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'مدیرها' then
+      return modlist(msg)
+    end
+    
+    if matches[1] == 'اادمین' then
+      if not is_admin(msg) then
+        return "فقط سودو می تواند یک یوزر را به ادمینی ارتقا دهد"
+      end
+      local member = string.gsub(matches[2], "@", "")
+      chat_info(receiver, username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'خادمین' then
+      if not is_admin(msg) then
+        return "فقط سودو می تواند یک ادمین را از مقام خود خارج کند"
+      end
+      if string.match(matches[2], '^%d+$') then
+        admin_demote(receiver, matches[2], matches[2])
+      else
+        local member = string.gsub(matches[2], "@", "")
+        chat_info(receiver, username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+      end
+    end
+    
+    if matches[1] == 'لیست ادمین' then
+      if not is_admin(msg) then
+        return 'فقط ادمین ها'
+      end
+      return admin_list(msg)
+    end
+    
+    if matches[1] == 'chat_add_user' and msg.action.user.id == our_id then
+      chat_del_user(receiver, 'user#id'..our_id, ok_cb, true)
+    end
+    
+    if matches[1] == 'chat_created' and msg.from.id == 0 then
+      --return automodadd(msg)
+    end
+  end
+  if is_channel_msg(msg) then -- supergrouuuuppppppppp
+    local get_cmd = matches[1]
+    local receiver = get_receiver(msg)
+    if matches[1] == 'فعال' then
+      return modadd(msg)
+    end
+    
+    if matches[1] == 'غیر فعال' then
+      return modrem(msg)
+    end
+    
+    if matches[1] == 'اضافه مدیر' then
+      if not is_momod(msg) then
+        return
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اخراج مدیر' then
+      if not is_momod(msg) then
+        return "فقز مدیر ها می توانند یک فرد را از مقام مدیریت خارج کنند"
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      if string.gsub(matches[2], "@", "") == msg.from.username then
+        return "شما قدرتی ندارید که خودتان را از مقامتان اخراج کنید"
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اضافه ادمین' then
+      if not is_admin(msg) then
+        return "فقط یک ادمین می تواند یک فرد را به مقام ادمینی برساند"
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اخراج ادمین' then
+      if not is_admin(msg) then
+        return "فقط ادمین ها می توانند یک فرد را از مقام ادمینی خارج ککند"
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      if string.match(matches[2], '^%d+$') then
+        return sdemote(receiver, matches[2], matches[2])
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'مدیر ها' then
+      return modlist(msg)
+    end
+    
+    if matches[1] == 'اضافه  منیجر' then
+      if not is_admin(msg) then
+        if not is_spromoted(msg.to.id, msg.from.id) then
+          return "شما مدیر اصلی نمی باشید"
+        end
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      if string.match(matches[2], '^%d+$') then
+        return upmanager(receiver, matches[2], matches[2])
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اخراج منیجر' then
+      if not is_admin(msg) then
+        if not is_spromoted(msg.to.id, msg.from.id) then
+          return "شما مدیر ربات نمی باشید"
+        end
+      end
+      if not matches[2] and msg.reply_id then
+        get_message(msg.reply_id, get_msg_callback, {get_cmd=get_cmd, receiver=receiver})
+        return
+      end
+      if not matches[2] then
+        return
+      end
+      if string.match(matches[2], '^%d+$') then
+        return sdemote(receiver, matches[2], matches[2])
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'اادمین' then
+      if not is_admin(msg) then
+        return "فقط یک سودو می تواند یک فرد را به مقام ادمینی برساند"
+      end
+      local member = string.gsub(matches[2], "@", "")
+      channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+    end
+    
+    if matches[1] == 'خادمین' then
+      if not is_admin(msg) then
+        return "فقط سودو می تواند یک فرد را از مقام ادمینی خارج کند"
+      end
+      if string.match(matches[2], '^%d+$') then
+        admin_demote(receiver, matches[2], matches[2])
+      else
+        local member = string.gsub(matches[2], "@", "")
+        channel_get_users(receiver, channel_username_id, {get_cmd= get_cmd, receiver=receiver, member=member})
+      end
+    end
+    
+    if matches[1] == 'لیست ادمین' then
+      if not is_admin(msg) then
+        return 'لیست ادمین ها'
+      end
+      return admin_list(msg)
+    end
+    
+    if matches[1] == 'chat_add_user' and msg.action.user.id == our_id then
+      channel_kick_user(receiver, 'user#id'..our_id, ok_cb, true)
+    end
+  else
+    return
+  end
+end
+
+return {
+  description = "Moderation plugin", 
+  patterns = {
+    "^/(فعال)$",
+    "^/(غیر فعال)$",
+    "^/(اضافه مدیر) (.*)$",
+    "^/(اضافه مدیر)$",
+    "^/(اخراج مدیر) (.*)$",
+    "^/(اخراج مدیر)$",
+    "^/(اضافه  منیجر) (.*)$",
+    "^/(اضافه  منیجر)$",
+    "^/(اخراج منیجر) (.*)$",
+    "^/(اخراج منیجر)$",
+    "^/(اضافه ادمین) (.*)$",
+    "^/(اضافه ادمین)",
+    "^/(اخراج ادمین) (.*)$",
+    "^/(اخراج ادیمن)",
+    "^/(مدیر ها)$",
+    "^/(اادمین) (.*)$", -- sudoers only
+    "^/(خادمین) (.*)$", -- sudoers only
+    "^/(لیست ادمین)$",
+    "^!!tgservice (chat_add_user)$",
+    "^!!tgservice (chat_created)$",
+  }, 
+  run = run,
+}
+
+end
